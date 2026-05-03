@@ -1,4 +1,4 @@
-"""Serialization and CSV export for LiftScript workouts."""
+"""Serialization and CSV export for Repdown workouts."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from io import StringIO
 from typing import Any, Iterable
 
 
-def serialize_liftscript(workout: dict[str, Any]) -> str:
-    """Serialize a workout dictionary to readable LiftScript text."""
+def serialize_repdown(workout: dict[str, Any]) -> str:
+    """Serialize a workout dictionary to readable Repdown text."""
 
     _require_keys(workout, ["date", "title", "metadata", "exercises"], "workout")
 

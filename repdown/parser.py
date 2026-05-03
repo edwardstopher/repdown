@@ -1,4 +1,4 @@
-"""Parser for LiftScript workout logs."""
+"""Parser for Repdown workout logs."""
 
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ class _Line:
     text: str
 
 
-def parse_liftscript(source: str) -> dict[str, Any]:
-    """Parse a LiftScript string into a JSON-serializable dictionary."""
+def parse_repdown(source: str) -> dict[str, Any]:
+    """Parse a Repdown string into a JSON-serializable dictionary."""
 
     parser = _Parser(source)
     return parser.parse().to_dict()

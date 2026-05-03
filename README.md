@@ -1,6 +1,6 @@
-# LiftScript
+# Repdown
 
-LiftScript is a small, deterministic markup language for logging strength
+Repdown is a small, deterministic markup language for logging strength
 training workouts. It is designed to be human-readable like Markdown, fast to
 type on mobile, and straightforward to convert into JSON or CSV.
 
@@ -22,7 +22,7 @@ Workout -> Exercises -> Sets
 
 ## Example
 
-```liftscript
+```repdown
 2026-05-02
 Push Day
 
@@ -45,7 +45,7 @@ Lateral Raise
 ## File Structure
 
 ```text
-/liftscript
+/repdown
   parser.py
   serializer.py
   models.py
@@ -124,7 +124,7 @@ Comment lines begin with `#` in column 1 and are ignored before parsing.
 
 Metadata uses `key: value` and must appear before the first exercise.
 
-```liftscript
+```repdown
 unit: kg
 location: garage
 ```
@@ -136,7 +136,7 @@ start with a letter or underscore.
 
 Valid set lines:
 
-```liftscript
+```repdown
 100kg x 5
 225lb x 3 @9
 BW x 10
@@ -147,7 +147,7 @@ BW+20kg x 5
 
 Invalid set lines:
 
-```liftscript
+```repdown
 100x5          # missing spaces around x
 100 kg x 5     # unit must be attached to the number
 BW+20 x 5      # loaded bodyweight requires a unit
@@ -160,7 +160,7 @@ BW+20 x 5      # loaded bodyweight requires a unit
 Rep lists expand to multiple sets because each JSON set has one numeric `reps`
 field.
 
-```liftscript
+```repdown
 30 x 10, 10, 8
 ```
 
@@ -168,7 +168,7 @@ maps to three sets: `30 x 10`, `30 x 10`, and `30 x 8`.
 
 Modifiers on a multi-rep line apply to every expanded set:
 
-```liftscript
+```repdown
 30 x 10, 8 @8
 ```
 
@@ -217,7 +217,7 @@ Parser output is a plain Python dictionary that is directly JSON-serializable:
 
 ### Weight Mapping
 
-| LiftScript | JSON `weight` | JSON `unit` | JSON `bodyweight` |
+| Repdown | JSON `weight` | JSON `unit` | JSON `bodyweight` |
 | --- | ---: | --- | --- |
 | `100 x 5` | `100` | `null` | `false` |
 | `100kg x 5` | `100` | `"kg"` | `false` |
@@ -233,7 +233,7 @@ date,exercise,set_index,weight,reps,rpe,type
 ```
 
 - `set_index` is 1-based within each exercise.
-- `weight` is emitted as a readable LiftScript weight token such as `100`,
+- `weight` is emitted as a readable Repdown weight token such as `100`,
   `100kg`, `BW`, or `BW+20kg`.
 - Empty optional fields are emitted as empty CSV cells.
 
@@ -249,8 +249,8 @@ date,exercise,set_index,weight,reps,rpe,type
 ## Python Usage
 
 ```python
-from liftscript.parser import parse_liftscript
-from liftscript.serializer import serialize_liftscript, to_csv
+from repdown.parser import parse_repdown
+from repdown.serializer import serialize_repdown, to_csv
 
 source = """2026-05-02
 Push Day
@@ -262,8 +262,8 @@ Bench Press
 100 x 5 @8
 """
 
-workout = parse_liftscript(source)
-text = serialize_liftscript(workout)
+workout = parse_repdown(source)
+text = serialize_repdown(workout)
 csv_text = to_csv(workout)
 ```
 

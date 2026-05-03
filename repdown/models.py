@@ -1,4 +1,4 @@
-"""Data models for LiftScript workouts."""
+"""Data models for Repdown workouts."""
 
 from __future__ import annotations
 

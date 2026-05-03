@@ -1,8 +1,8 @@
 import unittest
 
-from liftscript.errors import ParseError
-from liftscript.parser import parse_liftscript
-from liftscript.serializer import serialize_liftscript, to_csv
+from repdown.errors import ParseError
+from repdown.parser import parse_repdown
+from repdown.serializer import serialize_repdown, to_csv
 
 
 EXAMPLE = """2026-05-02
@@ -27,7 +27,7 @@ Lateral Raise
 
 class ParserTests(unittest.TestCase):
     def test_parse_full_example(self):
-        workout = parse_liftscript(EXAMPLE)
+        workout = parse_repdown(EXAMPLE)
 
         self.assertEqual(workout["date"], "2026-05-02")
         self.assertEqual(workout["title"], "Push Day")
@@ -40,7 +40,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(workout["exercises"][2]["sets"][0]["type"], "amrap")
 
     def test_missing_title_with_blank_line(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 unit: kg
@@ -55,7 +55,7 @@ Squat
         self.assertEqual(workout["exercises"][0]["name"], "Squat")
 
     def test_missing_title_with_immediate_exercise_uses_lookahead(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 Deadlift
 180 x 3
@@ -66,7 +66,7 @@ Deadlift
         self.assertEqual(workout["exercises"][0]["name"], "Deadlift")
 
     def test_bodyweight_set(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 Pull Up
@@ -80,7 +80,7 @@ BW x 10
         self.assertIsNone(set_entry["unit"])
 
     def test_loaded_bodyweight_set(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 Dip
@@ -94,7 +94,7 @@ BW+20kg x 5
         self.assertEqual(set_entry["unit"], "kg")
 
     def test_weight_unit_and_decimal_weight(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 Bench Press
@@ -110,7 +110,7 @@ Bench Press
         self.assertEqual(second["unit"], "kg")
 
     def test_all_modifiers(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 Squat
@@ -125,7 +125,7 @@ Squat
         self.assertEqual(set_entry["type"], "warmup")
 
     def test_multi_rep_modifiers_apply_to_each_expanded_set(self):
-        workout = parse_liftscript(
+        workout = parse_repdown(
             """2026-05-02
 
 Incline DB Press
@@ -138,15 +138,15 @@ Incline DB Press
         self.assertEqual([set_entry["rpe"] for set_entry in sets], [8, 8])
 
     def test_serializer_round_trip(self):
-        workout = parse_liftscript(EXAMPLE)
-        rendered = serialize_liftscript(workout)
-        reparsed = parse_liftscript(rendered)
+        workout = parse_repdown(EXAMPLE)
+        rendered = serialize_repdown(workout)
+        reparsed = parse_repdown(rendered)
 
         self.assertEqual(reparsed, workout)
         self.assertIn("30 x 10, 10, 8", rendered)
 
     def test_csv_export(self):
-        workout = parse_liftscript(EXAMPLE)
+        workout = parse_repdown(EXAMPLE)
         csv_text = to_csv(workout)
 
         self.assertIn("date,exercise,set_index,weight,reps,rpe,type\n", csv_text)
@@ -155,7 +155,7 @@ Incline DB Press
 
     def test_invalid_date_raises_line_number(self):
         with self.assertRaises(ParseError) as context:
-            parse_liftscript(
+            parse_repdown(
                 """2026-02-30
 
 Squat
@@ -168,7 +168,7 @@ Squat
 
     def test_malformed_set_raises(self):
         with self.assertRaises(ParseError) as context:
-            parse_liftscript(
+            parse_repdown(
                 """2026-05-02
 
 Squat
@@ -181,7 +181,7 @@ Squat
 
     def test_unknown_modifier_raises(self):
         with self.assertRaises(ParseError) as context:
-            parse_liftscript(
+            parse_repdown(
                 """2026-05-02
 
 Squat
@@ -194,7 +194,7 @@ Squat
 
     def test_duplicate_modifier_raises(self):
         with self.assertRaises(ParseError) as context:
-            parse_liftscript(
+            parse_repdown(
                 """2026-05-02
 
 Squat
@@ -207,7 +207,7 @@ Squat
 
     def test_exercise_without_sets_raises(self):
         with self.assertRaises(ParseError) as context:
-            parse_liftscript(
+            parse_repdown(
                 """2026-05-02
 
 Squat
