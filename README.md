@@ -1,45 +1,65 @@
 # Repdown
 
-Repdown is a small, deterministic markup language for logging strength
-training workouts. It is designed to be human-readable like Markdown, fast to
-type on mobile, and straightforward to convert into JSON or CSV.
+Repdown is a small, deterministic Markdown subset for logging strength
+training workouts. A Repdown file renders cleanly in Markdown editors while
+remaining strict enough to parse into structured JSON or CSV.
+
+Repdown v2 is a breaking format change. It no longer parses the original
+date-first v1 syntax.
 
 The core data model is:
 
 ```text
-Workout -> Exercises -> Sets
+Workout -> Blocks -> Exercise | Superset -> Exercises -> Sets
 ```
 
 ## Design Goals
 
-- Human-readable workout logs that remain pleasant to type by hand.
+- Valid Markdown that remains readable in ordinary editors and renderers.
 - Deterministic parsing with loud failures for invalid syntax.
-- A compact syntax for common lifting data: weight, reps, RPE, rest, tempo, and
-  set type.
-- Lossless enough JSON output for storage and APIs.
+- A compact syntax for common lifting data: weight, reps, effort, rest, tempo,
+  and set type.
+- Structured output that preserves exercise and superset ordering.
 - Simple CSV export for spreadsheets and analysis.
 - No heavy runtime dependencies.
 
 ## Example
 
-```repdown
-2026-05-02
-Push Day
+```markdown
+# Push Day
 
-unit: kg
+Date: 2026-05-02
+Unit: lb
+Effort: RIR
 
-Bench Press
-100 x 5
-100 x 5
-100 x 5 @8
+## Exercises
 
-Incline DB Press
-30 x 10, 10, 8
+## Barbell Bench Press
 
-Lateral Raise
-12 x 15 amrap
+- 185 x 5
+- 185 x 5 @1
 
-# left shoulder slightly off
+Notes: Shoulder felt off
+
+## Barbell Back Squat
+
+- 225 x 6
+- 225 x 6
+- 225 x 5.5
+
+## Superset 1
+
+### Seated Dumbbell Hammer Curl
+
+- 30 x 10
+- 30 x 10
+- 30 x 10
+
+### Seated Overhead Dumbbell Press
+
+- 55 x 6
+- 55 x 6
+- 55 x 6
 ```
 
 ## File Structure
@@ -57,102 +77,120 @@ README.md
 
 ## Grammar
 
-This grammar is intentionally strict. Whitespace around `x`, between
-modifiers, and after commas in rep lists is required exactly where shown.
-Surrounding whitespace at the beginning and end of a line is ignored by the
-parser. Inline comments are not supported.
+Repdown is intentionally a narrow Markdown subset. Arbitrary Markdown prose,
+unexpected heading levels, set bullets outside exercises, and malformed set
+lines are rejected.
+
+Trailing Markdown hard-break spaces after `Date:` and `Unit:` are emitted by
+the serializer but are not required by the parser.
 
 ```ebnf
-workout        = date_line, newline,
-                 [ title_line, newline ],
-                 blank_lines,
-                 metadata_lines,
-                 blank_lines,
-                 exercise_block, { blank_lines, exercise_block },
-                 blank_lines ;
+document          = [ title, blank_lines ],
+                    date_line, blank_lines,
+                    unit_line, blank_lines,
+                    effort_line, blank_lines,
+                    { note_line, blank_lines },
+                    exercises_section,
+                    block, { blank_lines, block } ;
 
-date_line      = iso_date ;
-iso_date       = digit, digit, digit, digit, "-", digit, digit, "-", digit, digit ;
+title             = "# ", text ;
+date_line         = "Date: ", iso_date ;
+unit_line         = "Unit: ", unit ;
+effort_line       = "Effort: ", effort_type ;
+effort_type       = "RPE" | "RIR" ;
+exercises_section = "## Exercises" ;
 
-title_line     = text_line ;
+block             = exercise_block | superset_block ;
 
-metadata_lines = { metadata_line, newline, blank_lines } ;
-metadata_line  = key, ": ", value ;
-key            = alpha_or_underscore, { alpha_or_digit_or_underscore_or_dash } ;
-value          = non_empty_text ;
+exercise_block    = "## ", exercise_name, blank_lines,
+                    set_or_note, { blank_lines, set_or_note } ;
 
-exercise_block = exercise_name, newline, set_line, { newline, set_line } ;
-exercise_name  = text_line ;
+superset_block    = "## Superset ", name, blank_lines,
+                    { note_line, blank_lines },
+                    nested_exercise, { blank_lines, nested_exercise } ;
 
-set_line       = weight, " x ", reps, [ " ", modifiers ] ;
+nested_exercise   = "### ", exercise_name, blank_lines,
+                    set_or_note, { blank_lines, set_or_note } ;
 
-weight         = numeric_weight | bodyweight | loaded_bodyweight ;
-numeric_weight = number, [ unit ] ;
-bodyweight     = "BW" ;
-loaded_bodyweight = "BW+", number, unit ;
+set_or_note       = set_line | note_line ;
+note_line         = "Notes: ", text ;
 
-reps           = integer, { ", ", integer } ;
+set_line          = "- ", weight, " x ", reps, [ " ", modifiers ] ;
 
-modifiers      = modifier, { " ", modifier } ;
-modifier       = rpe | rest | tempo | set_type ;
-rpe            = "@", number ;
-rest           = "r=", integer, "s" ;
-tempo          = "t=", integer, "-", integer, "-", integer ;
-set_type       = "warmup" | "drop" | "amrap" ;
+weight            = numeric_weight | bodyweight | loaded_bodyweight ;
+numeric_weight    = number, [ unit ] ;
+bodyweight        = "BW" ;
+loaded_bodyweight = "BW+", number, [ unit ] ;
 
-unit           = alpha, { alpha } ;
-number         = integer, [ ".", digit, { digit } ] ;
-integer        = "0" | nonzero_digit, { digit } ;
+reps              = number, { ", ", number } ;
 
-blank_lines    = { blank_line, newline } ;
-blank_line     = "" ;
-comment_line   = "#", any_text ;
+modifiers         = modifier, { " ", modifier } ;
+modifier          = effort | rest | tempo | set_type ;
+effort            = "@", number ;
+rest              = "r=", integer, "s" ;
+tempo             = "t=", integer, "-", integer, "-", integer ;
+set_type          = "warmup" | "drop" | "amrap" ;
+
+unit              = alpha, { alpha } ;
+number            = integer, [ ".", digit, { digit } ] ;
+integer           = "0" | nonzero_digit, { digit } ;
 ```
 
-Comment lines begin with `#` in column 1 and are ignored before parsing.
+## Header Rules
 
-### Header Rules
+- `# <title>` is optional.
+- `Date: YYYY-MM-DD`, `Unit: <unit>`, and `Effort: RPE|RIR` are required.
+- `## Exercises` is required and marks the start of workout content.
+- Workout-level `Notes:` lines may appear between the effort line and
+  `## Exercises`.
 
-- The first non-comment content line must be an ISO date: `YYYY-MM-DD`.
-- The title is optional.
-- If the title is omitted and the first exercise comes immediately after the
-  date, the parser uses lookahead: a line followed by a valid set line is an
-  exercise name, not a title.
-- A metadata line immediately after the date is metadata, not a title.
+## Unit and Effort Rules
 
-### Metadata Rules
+Numeric weights without an attached unit inherit the workout `Unit:`.
 
-Metadata uses `key: value` and must appear before the first exercise.
+```markdown
+Unit: lb
 
-```repdown
-unit: kg
-location: garage
+- 185 x 5
+- 100kg x 5
 ```
 
-Metadata keys may contain letters, digits, underscores, and dashes, but must
-start with a letter or underscore.
+The first set parses as `185 lb`. The second set uses an explicit `kg`
+override.
 
-### Set Rules
+The `Effort:` header determines how `@<number>` should be interpreted.
+
+```markdown
+Effort: RIR
+
+- 185 x 5 @1
+```
+
+The set above parses as `effort: 1` with workout-level
+`effort_type: "RIR"`.
+
+## Set Rules
 
 Valid set lines:
 
-```repdown
-100kg x 5
-225lb x 3 @9
-BW x 10
-BW+20kg x 5
-30 x 10, 10, 8
-100 x 5 @8 r=120s t=3-1-1 warmup
+```markdown
+- 100 x 5
+- 225lb x 3 @9
+- 225 x 5.5
+- BW x 10
+- BW+20 x 5
+- BW+20kg x 5
+- 30 x 10, 10, 8.5
+- 100 x 5 @8 r=120s t=3-1-1 warmup
 ```
 
 Invalid set lines:
 
-```repdown
-100x5          # missing spaces around x
-100 kg x 5     # unit must be attached to the number
-BW+20 x 5      # loaded bodyweight requires a unit
-100 x 5 # note  # inline comments are not supported
-100 x 5 hard   # unknown modifier
+```markdown
+- 100x5          # missing spaces around x
+- 100 kg x 5     # unit must be attached to the number
+- 100 x 5 hard   # unknown modifier
+100 x 5          # missing Markdown bullet
 ```
 
 ### Multi-Rep Shorthand
@@ -160,19 +198,40 @@ BW+20 x 5      # loaded bodyweight requires a unit
 Rep lists expand to multiple sets because each JSON set has one numeric `reps`
 field.
 
-```repdown
-30 x 10, 10, 8
+```markdown
+- 30 x 10, 10, 8.5
 ```
 
-maps to three sets: `30 x 10`, `30 x 10`, and `30 x 8`.
+maps to three sets: `30 x 10`, `30 x 10`, and `30 x 8.5`.
 
 Modifiers on a multi-rep line apply to every expanded set:
 
-```repdown
-30 x 10, 8 @8
+```markdown
+- 30 x 10, 8 @2
 ```
 
-maps to two sets, both with `rpe: 8`.
+maps to two sets, both with `effort: 2`.
+
+## Supersets
+
+A superset is an ordered block with nested exercises.
+
+```markdown
+## Superset 1
+
+Notes: Rest 90 seconds after each round
+
+### Pull Up
+
+- BW x 8
+
+### Dip
+
+- BW x 10
+```
+
+`Notes:` lines before the first nested exercise attach to the superset.
+`Notes:` lines inside a nested exercise attach to that exercise.
 
 ## JSON Mapping
 
@@ -182,68 +241,90 @@ Parser output is a plain Python dictionary that is directly JSON-serializable:
 {
   "date": "2026-05-02",
   "title": "Push Day",
-  "metadata": {
-    "unit": "kg"
-  },
-  "exercises": [
+  "unit": "lb",
+  "effort_type": "RIR",
+  "notes": [],
+  "blocks": [
     {
-      "name": "Bench Press",
+      "type": "exercise",
+      "name": "Barbell Bench Press",
       "sets": [
         {
-          "weight": 100,
-          "unit": null,
+          "weight": 185,
+          "unit": "lb",
           "bodyweight": false,
           "reps": 5,
-          "rpe": null,
+          "effort": null,
           "rest_seconds": null,
           "tempo": null,
           "type": null
         },
         {
-          "weight": 100,
-          "unit": null,
+          "weight": 185,
+          "unit": "lb",
           "bodyweight": false,
           "reps": 5,
-          "rpe": 8,
+          "effort": 1,
           "rest_seconds": null,
           "tempo": null,
           "type": null
         }
-      ]
+      ],
+      "notes": ["Shoulder felt off"]
     }
   ]
 }
 ```
 
-### Weight Mapping
+Superset blocks use this shape:
 
-| Repdown | JSON `weight` | JSON `unit` | JSON `bodyweight` |
-| --- | ---: | --- | --- |
-| `100 x 5` | `100` | `null` | `false` |
-| `100kg x 5` | `100` | `"kg"` | `false` |
-| `BW x 10` | `null` | `null` | `true` |
-| `BW+20kg x 5` | `20` | `"kg"` | `true` |
+```json
+{
+  "type": "superset",
+  "name": "1",
+  "exercises": [
+    {
+      "name": "Pull Up",
+      "sets": [
+        {
+          "weight": null,
+          "unit": null,
+          "bodyweight": true,
+          "reps": 8,
+          "effort": null,
+          "rest_seconds": null,
+          "tempo": null,
+          "type": null
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "notes": []
+}
+```
 
 ## CSV Mapping
 
 CSV export flattens the workout into one row per set with these columns:
 
 ```text
-date,exercise,set_index,weight,reps,rpe,type
+date,block_type,superset,exercise,set_index,weight,unit,reps,effort_type,effort,type
 ```
 
+- `block_type` is `exercise` or `superset`.
+- `superset` is empty for normal exercise blocks.
 - `set_index` is 1-based within each exercise.
-- `weight` is emitted as a readable Repdown weight token such as `100`,
-  `100kg`, `BW`, or `BW+20kg`.
-- Empty optional fields are emitted as empty CSV cells.
+- `weight` is numeric for loaded sets, `BW` for bodyweight sets, and `BW+N`
+  for loaded bodyweight sets.
+- `unit` is emitted separately for structured analysis.
 
 Example:
 
 ```csv
-date,exercise,set_index,weight,reps,rpe,type
-2026-05-02,Bench Press,1,100,5,,
-2026-05-02,Bench Press,2,100,5,8,
-2026-05-02,Lateral Raise,1,12,15,,amrap
+date,block_type,superset,exercise,set_index,weight,unit,reps,effort_type,effort,type
+2026-05-02,exercise,,Barbell Bench Press,1,185,lb,5,RIR,,
+2026-05-02,exercise,,Barbell Bench Press,2,185,lb,5,RIR,1,
 ```
 
 ## Python Usage
@@ -252,14 +333,18 @@ date,exercise,set_index,weight,reps,rpe,type
 from repdown.parser import parse_repdown
 from repdown.serializer import serialize_repdown, to_csv
 
-source = """2026-05-02
-Push Day
+source = """# Push Day
 
-unit: kg
+Date: 2026-05-02
+Unit: lb
+Effort: RIR
 
-Bench Press
-100 x 5
-100 x 5 @8
+## Exercises
+
+## Barbell Bench Press
+
+- 185 x 5
+- 185 x 5 @1
 """
 
 workout = parse_repdown(source)
@@ -278,19 +363,14 @@ python3 -m unittest discover -s tests
 ## Edge Cases
 
 - Missing title is valid.
-- Comments are ignored only when `#` is the first character on the line.
-- Inline comments are invalid.
-- Metadata after the first exercise is invalid.
-- Exercise names must not be valid set lines or metadata lines.
+- Old v1 Repdown syntax is invalid.
+- Header metadata is required before `## Exercises`.
+- `## Exercises` is required and may appear only once.
+- Normal exercises use `## <exercise>`.
+- Superset exercises use `### <exercise>` inside a `## Superset <name>` block.
 - Each exercise must have at least one set.
-- Duplicate modifiers on a set line are invalid.
+- Duplicate effort, rest, tempo, or set type modifiers are invalid.
 - More than one set type on a set line is invalid.
-- `BW+<number><unit>` requires a unit.
 - Rep lists expand into multiple JSON set objects.
 - Serialization may group consecutive compatible sets back into rep-list
   shorthand for readability.
-
-## Stretch Goal Status
-
-Superset syntax such as `[Superset A]` is not implemented in this version. The
-current parser rejects it so the base grammar remains strict and deterministic.
